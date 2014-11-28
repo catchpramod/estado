@@ -23,62 +23,79 @@ import java.util.Date;
 import java.util.List;
 
 /**
- *
  * @author pranab
  */
 public class JobStatusConsoleConsumer implements JobStatusConsumer {
-    
+
     @Override
     public void handle(List<JobStatus> jobStatuses) {
-    	System.out.println("Reporting on " + jobStatuses.size() + " jobs\n\n");
+        String newLine = System.getProperty("line.separator");//This will retrieve line separator dependent on OS.
+        System.out.println("Reporting on " + jobStatuses.size() + " jobs\n\n");
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         Date date = Calendar.getInstance().getTime();
 
         int count = 1;
-        for (JobStatus jobStatus : jobStatuses){
-	        date.setTime(jobStatus.getStartTime());
-	        String startTime = formatter.format(date);
-	        
-	        String endTime = "";
-	        if (null != jobStatus.getEndTime()) {
-	            date.setTime(jobStatus.getEndTime());
-	            endTime = formatter.format(date);
-	            
-	        }
-	        
-	        String duration = "";
-	        if (null != jobStatus.getDuration()) {
-	        	duration = formattedTime(jobStatus.getDuration());
-	        }
-	        
-	        
-	        //job stat
-	        System.out.println("\nJob:  " + count);
-	        System.out.println("Cluster:" + jobStatus.getCluster());
-	        System.out.println("Job Id:" + jobStatus.getJobId());
-	        System.out.println("Job name:" + jobStatus.getJobName() != null ? jobStatus.getJobName() : "");
-	        System.out.println("Notes:" + jobStatus.getNotes() != null ? jobStatus.getNotes() : "");
-	        System.out.println("User:" + jobStatus.getUser());
-	        System.out.println("Start time:" + startTime);
-	        System.out.println("End time:" + endTime);
-	        System.out.println("Duration:" + duration);
-	        System.out.println("Map progress:" + jobStatus.getMapProgress());
-	        System.out.println("Reduce progress:" + jobStatus.getReduceProgress());
-	        System.out.println("Status:" + jobStatus.getStatus());
-	        
-	        //counters
-	        for(JobCounterGroup counterGroup : jobStatus.getCounterGroups()){
-		        System.out.println("Counter group:" + counterGroup.getName());
-		        for (JobCounterGroup.JobCounter counter : counterGroup.getJobCounters()){
-			        System.out.println("\t" + counter.getName() + "=" + counter.getValue());
-		        }
-	        }
-	        
-	        ++count;
-    	}
+        for (JobStatus jobStatus : jobStatuses) {
+            date.setTime(jobStatus.getStartTime());
+            String startTime = formatter.format(date);
+
+            String endTime = "";
+            if (null != jobStatus.getEndTime()) {
+                date.setTime(jobStatus.getEndTime());
+                endTime = formatter.format(date);
+
+            }
+
+            String duration = "";
+            if (null != jobStatus.getDuration()) {
+                duration = formattedTime(jobStatus.getDuration());
+            }
+
+
+            //job stat
+            System.out.println("\nJob: " + count);
+            System.out.println("Cluster: " + jobStatus.getCluster());
+            System.out.println("Job Id: " + jobStatus.getJobId());
+            System.out.println(jobStatus.getJobName() != null ? "Job name:" + jobStatus.getJobName().substring(jobStatus.getJobName().indexOf(' ')) : "");
+            System.out.println(jobStatus.getNotes() != null ? "Notes: " + jobStatus.getNotes() : "");
+            System.out.println("User: " + jobStatus.getUser());
+            System.out.println("Start time: " + startTime);
+            System.out.println("End time: " + endTime);
+            System.out.println("Duration: " + duration);
+            System.out.println("Map progress: " + jobStatus.getMapProgress());
+            System.out.println("Reduce progress: " + jobStatus.getReduceProgress());
+            System.out.println("Status: " + jobStatus.getStatus());
+
+            //counters
+            for (JobCounterGroup counterGroup : jobStatus.getCounterGroups()) {
+                System.out.println("Counter group:" + counterGroup.getName());
+                for (JobCounterGroup.JobCounter counter : counterGroup.getJobCounters()) {
+                    System.out.println("\t" + counter.getName() + "=" + counter.getValue());
+                }
+            }
+
+
+            //task detail
+            if (jobStatus.getJobTasks().size() > 0) {
+                System.out.println("*******************************************Task Details*******************************************");
+                for (TaskStatus taskStatus : jobStatus.getJobTasks()) {
+                    System.out.println("Task Id: " + taskStatus.getTaskId());
+                    System.out.println("Task Type: " + taskStatus.getTaskType());
+                    System.out.println("Task Status: " + taskStatus.getStatus());
+                    System.out.println("Task Duration: " + formattedTime(taskStatus.getDuration()));
+                    if (taskStatus.getLog() != null) {
+                        System.out.println("Task log:");
+                        System.out.println(taskStatus.getLog());
+                    }
+                    System.out.print(newLine);
+                }
+            }
+            System.out.println(newLine);
+            ++count;
+        }
     }
-    
-    private String formattedTime(long time){
+
+    private String formattedTime(long time) {
         long milSec = time % 1000;
         time /= 1000;
         long sec = time % 60;
@@ -87,30 +104,30 @@ public class JobStatusConsoleConsumer implements JobStatusConsumer {
         time /= 60;
         long hour = time % 24;
         StringBuilder stBuilder = new StringBuilder();
-        if (hour > 0 ){
+        if (hour > 0) {
             stBuilder.append(formatField(hour, 2)).append("hour:");
         }
-        if (min > 0){
+        if (min > 0) {
             stBuilder.append(formatField(min, 2)).append("min:");
         }
-        if (sec > 0){
+        if (sec > 0) {
             stBuilder.append(formatField(sec, 2)).append("sec:");
         }
-        if (milSec > 0){
+        if (milSec > 0) {
             stBuilder.append(formatField(milSec, 3)).append("ms");
         }
         return stBuilder.toString();
     }
-    
-    private String formatField(long value, int size){
-    	String stValue = null;
-    	if (2 == size){
-    		stValue = value < 10 ? "0" + value : "" + value;
-    	} else {
-    		stValue = value < 10 ? "00" + value : (value < 100 ? "0" + value : "" + value);
-    	}
-    	return stValue;
+
+    private String formatField(long value, int size) {
+        String stValue = null;
+        if (2 == size) {
+            stValue = value < 10 ? "0" + value : "" + value;
+        } else {
+            stValue = value < 10 ? "00" + value : (value < 100 ? "0" + value : "" + value);
+        }
+        return stValue;
     }
-    
+
 
 }

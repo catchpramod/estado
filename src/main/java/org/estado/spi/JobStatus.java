@@ -21,11 +21,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- *
  * @author pranab
  */
 public class JobStatus {
-	private String cluster;
+    private String cluster;
     private String jobId;
     private String jobName;
     private String user;
@@ -37,25 +36,26 @@ public class JobStatus {
     private String status;
     private String notes;
     private List<JobCounterGroup> counterGroups = new ArrayList<JobCounterGroup>();
+    private List<TaskStatus> jobTasks = new ArrayList<TaskStatus>();
 
     public JobStatus(String cluster, String jobId, String jobName, String notes, String user, Long startTime,
-			Long endTime, Long duration, int mapProgress, int reduceProgress,
-			String status) {
-		super();
-		this.cluster = cluster;
-		this.jobId = jobId;
-		this.jobName = jobName;
-		this.notes = notes;
-		this.user = user;
-		this.startTime = startTime;
-		this.endTime = endTime;
-		this.duration = duration;
-		this.mapProgress = mapProgress;
-		this.reduceProgress = reduceProgress;
-		this.status = status;
-	}
+                     Long endTime, Long duration, int mapProgress, int reduceProgress,
+                     String status) {
+        super();
+        this.cluster = cluster;
+        this.jobId = jobId;
+        this.jobName = jobName;
+        this.notes = notes;
+        this.user = user;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.duration = duration;
+        this.mapProgress = mapProgress;
+        this.reduceProgress = reduceProgress;
+        this.status = status;
+    }
 
-	/**
+    /**
      * @return the jobId
      */
     public String getJobId() {
@@ -70,14 +70,14 @@ public class JobStatus {
     }
 
     public String getJobName() {
-		return jobName;
-	}
+        return jobName;
+    }
 
-	public void setJobName(String jobName) {
-		this.jobName = jobName;
-	}
+    public void setJobName(String jobName) {
+        this.jobName = jobName;
+    }
 
-	/**
+    /**
      * @return the user
      */
     public String getUser() {
@@ -147,44 +147,53 @@ public class JobStatus {
         this.status = status;
     }
 
-	public String getCluster() {
-		return cluster;
-	}
+    public String getCluster() {
+        return cluster;
+    }
 
-	public void setCluster(String cluster) {
-		this.cluster = cluster;
-	}
+    public void setCluster(String cluster) {
+        this.cluster = cluster;
+    }
 
-	public int getMapProgress() {
-		return mapProgress;
-	}
+    public int getMapProgress() {
+        return mapProgress;
+    }
 
-	public void setMapProgress(int mapProgress) {
-		this.mapProgress = mapProgress;
-	}
+    public void setMapProgress(int mapProgress) {
+        this.mapProgress = mapProgress;
+    }
 
-	public int getReduceProgress() {
-		return reduceProgress;
-	}
+    public int getReduceProgress() {
+        return reduceProgress;
+    }
 
-	public void setReduceProgress(int reduceProgress) {
-		this.reduceProgress = reduceProgress;
-	}
+    public void setReduceProgress(int reduceProgress) {
+        this.reduceProgress = reduceProgress;
+    }
 
-	public List<JobCounterGroup> getCounterGroups() {
-		return counterGroups;
-	}
+    public List<JobCounterGroup> getCounterGroups() {
+        return counterGroups;
+    }
 
-	public void setCounterGroups(List<JobCounterGroup> counterGroups) {
-		this.counterGroups = counterGroups;
-	}
+    public void setCounterGroups(List<JobCounterGroup> counterGroups) {
+        this.counterGroups = counterGroups;
+    }
 
-	public String getNotes() {
-		return notes;
-	}
+    public String getNotes() {
+        return notes;
+    }
 
-	public void setNotes(String notes) {
-		this.notes = notes;
-	}
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public List<TaskStatus> getJobTasks() {
+        return jobTasks;
+    }
+
+    public void setJobTasks(List<TaskStatus> jobTasks) {
+        this.jobTasks = jobTasks;
+    }
+
 
 }

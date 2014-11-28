@@ -17,24 +17,21 @@
 
 package org.estado.core;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapred.JobClient;
-import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.mapred.JobStatus;
-import org.apache.hadoop.mapred.TaskReport;
-import org.estado.spi.JobCounterGroup;
-import org.estado.spi.JobStatusConsumer;
+import org.estado.spi.*;
 
 /**
- *
  * @author Pranab
  */
 public class JobStatusChecker {
@@ -46,18 +43,18 @@ public class JobStatusChecker {
     private int kCount = 0;
     private String cluster;
     private List<JobStatusConsumer> consumers;
-    
-    public JobStatusChecker(String filter, String cluster,
-			List<JobStatusConsumer> consumers) {
-		super();
-		this.filter = filter;
-		this.cluster = cluster;
-		this.consumers = consumers;
-	}
 
-	public void checkStatus(){
+    public JobStatusChecker(String filter, String cluster,
+                            List<JobStatusConsumer> consumers) {
+        super();
+        this.filter = filter;
+        this.cluster = cluster;
+        this.consumers = consumers;
+    }
+
+    public void checkStatus() {
         List<org.estado.spi.JobStatus> jobStatusList = new ArrayList<org.estado.spi.JobStatus>();
-        
+
         try {
             Configuration conf = new Configuration();
             JobClient client = new JobClient(new JobConf(conf));
@@ -81,57 +78,64 @@ public class JobStatusChecker {
                 }
                 client.getSetupTaskReports(jobStatus.getJobID());
                 client.getCleanupTaskReports(jobStatus.getJobID());
-                
+
                 String jobId = jobStatus.getJobID().toString();
+                String jobName = client.getJob(jobStatus.getJobID()).getJobName();
                 Long startTime = jobStatus.getStartTime();
                 String user = jobStatus.getUsername();
-                int mapProgress = (int)(jobStatus.mapProgress() * 100);
-                int reduceProgress = (int)(jobStatus.reduceProgress() * 100);
+                int mapProgress = (int) (jobStatus.mapProgress() * 100);
+                int reduceProgress = (int) (jobStatus.reduceProgress() * 100);
                 org.estado.spi.JobStatus jobStat = null;
                 ++jobCount;
 
                 int runState = jobStatus.getRunState();
-                switch(runState){
+                switch (runState) {
                     case JobStatus.SUCCEEDED:
-                        if (filter.contains("s")){
+                        if (filter.contains("s")) {
                             Long duration = lastTaskEndTime - jobStatus.getStartTime();
-                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, null, null, user, startTime, lastTaskEndTime,  
-                            		duration, mapProgress, reduceProgress, "completed");
+                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, jobName, null, user, startTime, lastTaskEndTime,
+                                    duration, mapProgress, reduceProgress, "completed");
                             ++sCount;
                         }
                         break;
 
                     case JobStatus.RUNNING:
-                        if (filter.contains("r")){
+                        if (filter.contains("r")) {
                             long duration = System.currentTimeMillis() - jobStatus.getStartTime();
-                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, null, null, user, startTime,  
-                            		lastTaskEndTime,  duration, mapProgress, reduceProgress,"running");
+                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, jobName, null, user, startTime,
+                                    lastTaskEndTime, duration, mapProgress, reduceProgress, "running");
                             ++rCount;
                         }
                         break;
 
                     case JobStatus.FAILED:
-                        if (filter.contains("f")){
+                        if (filter.contains("f")) {
                             long duration = lastTaskEndTime - jobStatus.getStartTime();
-                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, null, null, user, startTime,
-                            		lastTaskEndTime,  duration, mapProgress, reduceProgress, "failed");
+                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, jobName, null, user, startTime,
+                                    lastTaskEndTime, duration, mapProgress, reduceProgress, "failed");
+                            RunningJob job = client.getJob(jobStatus.getJobID());
+                            jobStat.setJobTasks(getTaskDetails(job));
                             ++fCount;
                         }
                         break;
 
                     case JobStatus.PREP:
-                        if (filter.contains("p")){
-                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, null, null, user, null,
-                            		null,  null, 0, 0, "preparing");
+                        if (filter.contains("p")) {
+                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, jobName, null, user, null,
+                                    null, null, 0, 0, "preparing");
                             ++pCount;
                         }
                         break;
-                        
+
                     case JobStatus.KILLED:
-                        if (filter.contains("k")){
+                        if (filter.contains("k")) {
                             long duration = lastTaskEndTime - jobStatus.getStartTime();
-                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, null, null, user, startTime,
-                            		lastTaskEndTime,  duration, mapProgress, reduceProgress, "killed");
+
+                            jobStat = new org.estado.spi.JobStatus(cluster, jobId, jobName, null, user, startTime,
+                                    lastTaskEndTime, duration, mapProgress, reduceProgress, "killed");
+
+                            RunningJob job = client.getJob(jobStatus.getJobID());
+                            jobStat.setJobTasks(getTaskDetails(job));
                             ++kCount;
                         }
                         break;
@@ -139,23 +143,23 @@ public class JobStatusChecker {
 
                 jobStatusList.add(jobStat);
             }
-            
+
             //get counters
-            for (org.estado.spi.JobStatus jobStat : jobStatusList){
-            	if (!jobStat.getStatus().equals("preparing")){
-            		List<JobCounterGroup>  counterGroups = getJobCounters(jobStat.getJobId());
-            		jobStat.setCounterGroups(counterGroups);
-            		
-            		//additional data from counters
-            		setJobInfo(jobStat);
-            	}
+            for (org.estado.spi.JobStatus jobStat : jobStatusList) {
+                if (!jobStat.getStatus().equals("preparing")) {
+                    List<JobCounterGroup> counterGroups = getJobCounters(jobStat.getJobId());
+                    jobStat.setCounterGroups(counterGroups);
+
+                    //additional data from counters
+                    setJobInfo(jobStat);
+                }
             }
-            
+
             //publish to all consumers
-            for (JobStatusConsumer consumer : consumers){
-            	consumer.handle(jobStatusList);
+            for (JobStatusConsumer consumer : consumers) {
+                consumer.handle(jobStatusList);
             }
-            
+
             showJobCounts();
         } catch (Exception ex) {
             System.out.println("Jobs status checker failed" + ex.getMessage());
@@ -163,136 +167,167 @@ public class JobStatusChecker {
 
     }
 
-    private void showFilter(){
+    private void showFilter() {
         StringBuilder stBuilder = new StringBuilder("Reporting on ");
-        if (filter.contains("s")){
+        if (filter.contains("s")) {
             stBuilder.append(" succeeded ");
         }
-        if (filter.contains("r")){
+        if (filter.contains("r")) {
             stBuilder.append(" running ");
         }
-        if (filter.contains("f")){
+        if (filter.contains("f")) {
             stBuilder.append(" failed ");
         }
-        if (filter.contains("p")){
+        if (filter.contains("p")) {
             stBuilder.append(" preparing ");
         }
-        if (filter.contains("k")){
+        if (filter.contains("k")) {
             stBuilder.append(" killed ");
         }
         stBuilder.append(" jobs");
         System.out.println(stBuilder.toString());
     }
 
-    private void showJobCounts(){
-        if (filter.contains("s")){
+    private void showJobCounts() {
+        if (filter.contains("s")) {
             System.out.println("Found " + sCount + " completed jobs");
         }
-        if (filter.contains("r")){
+        if (filter.contains("r")) {
             System.out.println("Found " + rCount + " running jobs");
         }
-        if (filter.contains("f")){
+        if (filter.contains("f")) {
             System.out.println("Found " + fCount + " failed jobs");
         }
-        if (filter.contains("p")){
+        if (filter.contains("p")) {
             System.out.println("Found " + pCount + " preparing jobs");
         }
-        if (filter.contains("k")){
+        if (filter.contains("k")) {
             System.out.println("Found " + kCount + " killed jobs");
         }
     }
 
-    private List<JobCounterGroup>  getJobCounters(String jobId) throws Exception {
-    	List<JobCounterGroup> counterGroups = new ArrayList<JobCounterGroup>();
-        
-    	//shell command
-    	String cmd = "hadoop job -status " + jobId;
+    private List<JobCounterGroup> getJobCounters(String jobId) throws Exception {
+        List<JobCounterGroup> counterGroups = new ArrayList<JobCounterGroup>();
+
+        //shell command
+        String cmd = "hadoop job -status " + jobId;
         Process process = Runtime.getRuntime().exec(cmd);
         process.waitFor();
         BufferedReader buf = new BufferedReader(new InputStreamReader(process.getInputStream()));
         String line = "";
         List<String> lines = new ArrayList<String>();
-        while ((line=buf.readLine())!=null) {
+        while ((line = buf.readLine()) != null) {
             lines.add(line);
         }
-    	
+
         //parse output
         JobCounterGroup counterGroup = null;
         int i = 0;
         boolean found = false;
-        for ( ; i < lines.size(); ++i){
-        	if (lines.get(i).trim().startsWith("Counters:")){
-        		found = true;
-        		break;
-        	}
+        for (; i < lines.size(); ++i) {
+            if (lines.get(i).trim().startsWith("Counters:")) {
+                found = true;
+                break;
+            }
         }
-        
-        if (found){
-	        for (++i ; i < lines.size(); ++i){
-	        	line = lines.get(i).trim();
-	        	String[] items = line.split("=");
-	        	if (items.length == 1){
-	        		//start of new group
-	        		counterGroup = new JobCounterGroup();
-	        		counterGroup.setName(line);
-	        		counterGroups.add(counterGroup);
-	        	} else {
-	        		//another counter in current group
-	        		counterGroup.addJobCounter(items[0], new Long(items[1]));
-	        	}
-	        }
+
+        if (found) {
+            for (++i; i < lines.size(); ++i) {
+                line = lines.get(i).trim();
+                String[] items = line.split("=");
+                if (items.length == 1) {
+                    //start of new group
+                    counterGroup = new JobCounterGroup();
+                    counterGroup.setName(line);
+                    counterGroups.add(counterGroup);
+                } else {
+                    //another counter in current group
+                    counterGroup.addJobCounter(items[0], new Long(items[1]));
+                }
+            }
         } else {
-        	System.err.println("Error parsing counters");
+            System.err.println("Error parsing counters");
         }
-        
-    	return counterGroups;
-    }
-    
-    
-    private void setJobInfo(org.estado.spi.JobStatus jobStat){
-    	List<JobCounterGroup>  counterGroups = jobStat.getCounterGroups();
-    	
-    	String[] items = null;
-    	for (JobCounterGroup counterGroup : counterGroups){
-    		if (counterGroup.getName().equals("JobInfo")) {
-    			for (JobCounterGroup.JobCounter counter : counterGroup.getJobCounters()){
-    				if (counter.getName().startsWith("jobName")){
-    					items = counter.getName().split(":");
-    					jobStat.setJobName(items[1]);
-    				}
-    				if (counter.getName().startsWith("notes")){
-    					items = counter.getName().split(":");
-    					jobStat.setNotes(items[1]);
-    				}
-    			}
-    			break;
-    		}
-    	}
+
+        return counterGroups;
     }
 
-    public static void main(String[] args){
+
+    private void setJobInfo(org.estado.spi.JobStatus jobStat) {
+        List<JobCounterGroup> counterGroups = jobStat.getCounterGroups();
+
+        String[] items = null;
+        for (JobCounterGroup counterGroup : counterGroups) {
+            if (counterGroup.getName().equals("JobInfo")) {
+                for (JobCounterGroup.JobCounter counter : counterGroup.getJobCounters()) {
+                    if (counter.getName().startsWith("jobName")) {
+                        items = counter.getName().split(":");
+                        jobStat.setJobName(items[1]);
+                    }
+                    if (counter.getName().startsWith("notes")) {
+                        items = counter.getName().split(":");
+                        jobStat.setNotes(items[1]);
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    private List<TaskStatus> getTaskDetails(RunningJob job) {
+        TaskCompletionEvent[] tasks = new TaskCompletionEvent[0];
+        List<TaskStatus> taskStatusList = new ArrayList<TaskStatus>();
+        try {
+            tasks = job.getTaskCompletionEvents(0);
+
+            for (TaskCompletionEvent task : tasks) {
+                TaskStatus taskStatus = new TaskStatus();
+                taskStatus.setTaskId(task.getTaskAttemptId().toString());
+                taskStatus.setStatus(task.getTaskStatus().toString());
+                taskStatus.setDuration(task.getTaskRunTime()*1L); //change to long
+                taskStatus.setTaskType(task.isMapTask() ? "Map" : "Reduce");
+                if (!task.getTaskStatus().equals(TaskCompletionEvent.Status.SUCCEEDED)) {
+                    String url = task.getTaskTrackerHttp() + "/tasklog?attemptid="
+                            + task.getTaskAttemptId() + "&all=true";
+                    URLConnection connection = new URL(url).openConnection();
+                    connection.setDoOutput(true);
+                    connection.connect();
+                    Scanner s = new java.util.Scanner(connection.getInputStream()).useDelimiter("\\A");
+                    String log = s.hasNext() ? s.next() : "";
+                    taskStatus.setLog(log);
+                }
+                taskStatusList.add(taskStatus);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return taskStatusList;
+    }
+
+    public static void main(String[] args) {
         String confFilePath = args[0];
         try {
-        	    if (null != confFilePath){
-	            FileInputStream fis = new FileInputStream(confFilePath);
-	            Properties configProps = new Properties();
-	            configProps.load(fis);
-	            
-	            String cluster= configProps.getProperty("cluster.name", "default");
-	            String filter= configProps.getProperty("status.filter", "srfpk");
-	            if (filter.endsWith("*")){
-	            	filter = "srfpk";
-	            }
-	            
-	            ConsumerConfigurator consConfig = new ConsumerConfigurator();
-	            List<JobStatusConsumer> consumers = consConfig.buildConsumers(configProps);
-	            
-	            JobStatusChecker statusChecker = new JobStatusChecker(filter, cluster, consumers);
-	            statusChecker.checkStatus();
-	        }
-        } catch (Exception ex){
-        	System.err.println("Error starting " + ex);
+            if (null != confFilePath) {
+                FileInputStream fis = new FileInputStream(confFilePath);
+                Properties configProps = new Properties();
+                configProps.load(fis);
+
+                String cluster = configProps.getProperty("cluster.name", "default");
+                String filter = configProps.getProperty("status.filter", "srfpk");
+                if (filter.endsWith("*")) {
+                    filter = "srfpk";
+                }
+
+                ConsumerConfigurator consConfig = new ConsumerConfigurator();
+                List<JobStatusConsumer> consumers = consConfig.buildConsumers(configProps);
+
+                JobStatusChecker statusChecker = new JobStatusChecker(filter, cluster, consumers);
+                statusChecker.checkStatus();
+            }
+        } catch (Exception ex) {
+            System.err.println("Error starting " + ex);
         }
-    	
+
     }
 }
